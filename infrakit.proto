@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package hartech.infrakit;
+
+import "google/protobuf/empty.proto";
+
+// Represents a project
+message Project {
+  string uuid = 1;
+  string name = 2;
+}
+
+// Represents a piece of equipment
+message Equipment {
+  string uuid = 1;
+  string name = 2;
+}
+
+// Response for GetProjects
+message GetProjectsResponse {
+  repeated Project projects = 1;
+}
+
+// Request for GetFolderId
+message GetFolderIdRequest {
+  string projectId = 1;
+  string folderName = 2;
+}
+
+// Response for GetFolderId
+message GetFolderIdResponse {
+  string uuid = 1;
+}
+
+// Request for GetEquipments
+message GetEquipmentsRequest {
+  string projectId = 1;
+}
+
+// Response for GetEquipments
+message GetEquipmentsResponse {
+  repeated Equipment equipments = 1;
+}
+
+// The service definition
+service ProjectService {
+  // Returns a list of all projects
+  rpc GetProjects(google.protobuf.Empty) returns (GetProjectsResponse);
+
+  // Looks up the UUID of a folder by projectId and folderName
+  rpc GetFolderId(GetFolderIdRequest) returns (GetFolderIdResponse);
+
+  // Returns a list of equipment in a project
+  rpc GetEquipments(GetEquipmentsRequest) returns (GetEquipmentsResponse);
+}
