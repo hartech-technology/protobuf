@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package hartech.infrakit;
 
-import "google/protobuf/empty.proto";
-
 // Represents a project
 message Project {
   string uuid = 1;
@@ -15,6 +13,9 @@ message Equipment {
   string uuid = 1;
   string name = 2;
 }
+
+// Request for projects
+message GetProjectsRequest { }
 
 // Response for GetProjects
 message GetProjectsResponse {
@@ -45,7 +46,7 @@ message GetEquipmentsResponse {
 // The service definition
 service ProjectService {
   // Returns a list of all projects
-  rpc GetProjects(google.protobuf.Empty) returns (GetProjectsResponse);
+  rpc GetProjects(GetProjectsRequest) returns (GetProjectsResponse);
 
   // Looks up the UUID of a folder by projectId and folderName
   rpc GetFolderId(GetFolderIdRequest) returns (GetFolderIdResponse);
