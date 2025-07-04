@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package hartech.datahub;
+
+////////////////////////////////////////////////////////////////////////////////
+// Messages
+////////////////////////////////////////////////////////////////////////////////
+
+message Project {
+  string id = 1; // UUID as string
+  string name = 2;
+  bool is_enabled = 3;
+}
+
+message GetProjectsRequest {
+  bool show_hidden = 1;
+}
+
+message GetProjectsResponse {
+  repeated Project projects = 1;
+}
+
+message ProjectIdRequest {
+  string id = 1; // UUID as string
+}
+
+message ToggleProjectResponse {
+  // True if the enabled/disabled flag was changed; false if no change needed
+  bool changed = 1;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Service
+////////////////////////////////////////////////////////////////////////////////
+
+service ProjectsService {
+  // Returns all tracked projects (optionally including disabled ones)
+  rpc GetProjects(GetProjectsRequest) returns (GetProjectsResponse);
+
+  // Disables (hides) a project
+  rpc DisableProject(ProjectIdRequest) returns (ToggleProjectResponse);
+
+  // Enables (unhides) a project
+  rpc EnableProject(ProjectIdRequest) returns (ToggleProjectResponse);
+}
