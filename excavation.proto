@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package hartech.excavation;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/field_mask.proto";
+
+// Represents a new excavation notice (gravemelding).
+message ExcavationNotice {
+  // unique identifier (GUID as string).
+  string id = 1;
+
+  // guid of entrepeneur as string
+  string organization = 2;
+
+  // guid of user whom created the notice
+  string creator = 3;
+
+  ContactInfo contact_info = 4;
+
+  google.protobuf.Timestamp planned_start_date = 5;
+  google.protobuf.Timestamp planned_end_date = 6;
+
+  string description = 7;
+
+  GeoJsonPolygon excavation_area = 8;
+}
+
+// Minimal read model for list views.
+message ExcavationNoticeSummary {
+  // Same id as the full notice.
+  string id = 1;
+
+  // Server-generated concise text (e.g., trimmed/first sentence of `description`).
+  string short_description = 2;
+
+  // Average/centroid position of the exterior ring (WGS84).
+  // May be omitted if geometry is invalid/missing.
+  Position average_position = 3;
+}
+
+// Contact info for notice.
+message ContactInfo {
+  string name = 1;
+  string phone = 2;
+  string email = 3;
+}
+
+// A GeoJSON-style Polygon (WGS84).
+message GeoJsonPolygon {
+  // Must be "Polygon".
+  string type = 1;
+
+  // One or more linear rings. Ring 0 = exterior; subsequent rings = holes (optional).
+  repeated LinearRing coordinates = 2;
+}
+
+// A linear ring defined by an ordered list of positions.
+// The first and last position should be identical to “close” the ring.
+message LinearRing {
+  repeated Position positions = 1;
+}
+
+// A 2D position using GeoJSON order: [longitude, latitude].
+message Position {
+  double longitude = 1;
+  double latitude = 2;
+}
+
+// -------------------- Service & RPCs --------------------
+
+service ExcavationNoticeService {
+  // Create
+  rpc CreateNotice (CreateNoticeRequest) returns (CreateNoticeResponse);
+
+  // Read (by id - full data)
+  rpc GetNotice (GetNoticeRequest) returns (GetNoticeResponse);
+
+  // Read (list summaries - lightweight)
+  rpc ListNotices (ListNoticesRequest) returns (ListNoticesResponse);
+
+  // Update (partial updates via FieldMask)
+  rpc UpdateNotice (UpdateNoticeRequest) returns (UpdateNoticeResponse);
+
+  // Delete (by id)
+  rpc DeleteNotice (DeleteNoticeRequest) returns (DeleteNoticeResponse);
+}
+
+// -------- Create --------
+message CreateNoticeRequest {
+  ExcavationNotice notice = 1;
+}
+
+message CreateNoticeResponse {
+  string id = 1; // GUID
+}
+
+// -------- Get (single) --------
+message GetNoticeRequest {
+  string id = 1; // GUID
+}
+
+message GetNoticeResponse {
+  ExcavationNotice notice = 1;
+}
+
+// -------- List (summaries) --------
+message ListNoticesRequest {
+  // Optional filters (use any that make sense server-side):
+
+  // If set, only notices for this organization.
+  string organization = 1;
+
+  // Filter by planned date range (inclusive). If only one is set, treat as open-ended.
+  google.protobuf.Timestamp planned_from = 2;
+  google.protobuf.Timestamp planned_to   = 3;
+
+  // Basic pagination.
+  int32  page_size    = 4;   // e.g., 10–100
+  string page_token   = 5;   // pass-through cursor
+}
+
+message ListNoticesResponse {
+  repeated ExcavationNoticeSummary notices = 1;
+  string next_page_token = 2; // empty if no more pages
+}
+
+// -------- Update --------
+message UpdateNoticeRequest {
+  // The notice with updated fields. Its `id` must be set.
+  ExcavationNotice notice = 1;
+
+  // Field mask specifying which fields to update, e.g.:
+  // "contact_info.name", "planned_start_date", "excavation_area"
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message UpdateNoticeResponse {
+  ExcavationNotice notice = 1;
+}
+
+// -------- Delete --------
+message DeleteNoticeRequest {
+  string id = 1; // GUID
+}
+
+message DeleteNoticeResponse {
+  bool deleted = 1; // true if a record was deleted
+}
