@@ -1,0 +1,170 @@
+syntax = "proto3";
+
+package hartech.lerproxy.v1;
+
+option csharp_namespace = "Hartech.Integration.LER";
+
+// ===== ENUMS =====
+
+// Overall status of the utility package (Danish: "ledningspakke").
+enum UtilityPackageStatus {
+  UTILITY_PACKAGE_STATUS_UNSPECIFIED = 0;
+  AWAITING_UTILITY_OWNER = 1;   // Danish: "Afventer ledningsejer(e)"
+  RESPONSE_DEADLINE_EXPIRED = 2; // Danish: "Svarfrist udløbet"
+  PARTIALLY_COMPLETE = 3;       // Danish: "Delvist komplet"
+  COMPLETE = 4;                 // Danish: "Komplet"
+  ARCHIVED = 5;                 // Danish: "Arkiveret"
+  DELETED = 6;                  // Danish: "Slettet"
+  EMAIL_ONLY_RESPONSE = 7;      // Danish: "Kun svar via mail"
+  NO_UTILITY_OWNERS = 8;        // Danish: "Ingen ledningsejere"
+  NOT_CREATED = 9;              // Danish: "Ikke oprettet"
+  CONTACT_UTILITY_OWNER = 10;   // Danish: "Kontakt ledningsejer(e)"
+}
+
+// Asynchronous processing state for utility package generation.
+enum AsyncProcessingStatus {
+  ASYNC_PROCESSING_STATUS_UNSPECIFIED = 0;
+  NOT_STARTED = 1;              // Danish: "Ikke startet"
+  IN_PROGRESS = 2;              // Danish: "I gang"
+  DONE = 3;                     // Danish: "Færdig"
+  FAILED = 4;                   // Danish: "Fejlet"
+}
+
+// Combined status used by LER (Danish source terms: "ledningspakkestatus" + "async status").
+message UtilityPackageCombinedStatus {
+  UtilityPackageStatus package_status = 1;    // Danish: "ledningspakkestatus"
+  AsyncProcessingStatus async_status = 2;
+}
+
+// ===== SHARED CONTEXT =====
+
+// Per-call context forwarded by the proxy to LER as query parameters.
+// Note: LER expects transactionId (mandatory) and uses requestId for idempotency/retries.
+// Danish reference terms in comments below.
+message LerCallContext {
+  // Correlation/Idempotency (Danish: "requestId").
+  string request_id = 1;          // GUID
+
+  // Required by LER (Danish: "transactionId").
+  string transaction_id = 2;      // GUID (required by LER)
+
+  // The consuming organization's CVR to identify/bill (Danish: "tjenesteaftager_cvr").
+  string consumer_cvr = 3;        // Optional
+
+  // Marks a co-location request if/when LER supports it (Danish: "samføringsforespørgsel").
+  bool is_colocation_request = 4; // Optional
+}
+
+// ===== SERVICE =====
+
+service LerProxyService {
+  // 1) Create excavation request (Danish: "Opret graveforespørgsel" – integration 19).
+  rpc CreateExcavation (CreateExcavationRequest) returns (CreateExcavationResponse);
+
+  // 2) Get utility package (integration 16) (Danish: "Hent ledningspakke").
+  rpc GetUtilityPackage (GetUtilityPackageRequest) returns (GetUtilityPackageResponse);
+
+  // 3) Get status for one utility package (integration 15) (Danish: "Hent ledningspakkeStatus/{id}").
+  rpc GetUtilityPackageStatus (GetUtilityPackageStatusRequest) returns (GetUtilityPackageStatusResponse);
+
+  // 4) List statuses for all active utility packages (integration 25).
+  rpc ListUtilityPackageStatuses (ListUtilityPackageStatusesRequest) returns (ListUtilityPackageStatusesResponse);
+
+  // 5) Acknowledge receipt of a utility package (integration 26) (Danish: "ledningspakkeModtaget/{id}").
+  rpc AckUtilityPackage (AckUtilityPackageRequest) returns (AckUtilityPackageResponse);
+
+  // 6) Get receipt for excavation request (integration 24) (Danish: "kvittering for graveforespørgsel").
+  rpc GetExcavationReceipt (GetExcavationReceiptRequest) returns (GetExcavationReceiptResponse);
+
+  // 7) Proxy health check (non-LER; validates config/connectivity).
+  rpc Ping (PingRequest) returns (PingResponse);
+}
+
+// ===== REQUESTS / RESPONSES =====
+
+// (19) Create excavation request.
+// LER expects a Base64-encoded GML 3.3.0 payload with geometry (polygon), purpose, digging period, etc.
+// Danish source term: "graveforespørgsel".
+message CreateExcavationRequest {
+  LerCallContext ctx = 1;
+  // Base64-encoded GML 3.3.0 file as required by LER (Danish: "GML").
+  string gml_base64 = 2;
+}
+
+// LER assigns an "ExcavationRequestNumber" (Danish: "GraveforespørgselsNr") used as {id} in subsequent calls.
+message CreateExcavationResponse {
+  string excavation_request_number = 1; // Danish: "GraveforespørgselsNr"
+}
+
+// (16) Get utility package (Danish: "ledningspakke") for a given excavation request id.
+// LER returns a ZIP file; we expose it as Base64 with content type and filename.
+message GetUtilityPackageRequest {
+  LerCallContext ctx = 1;
+  // {id} is the excavation request number assigned by LER (Danish: "GraveforespørgselsNr").
+  string id = 2;
+}
+
+message GetUtilityPackageResponse {
+  string zip_base64 = 1;       // content of application/zip, Base64-encoded
+  string content_type = 2;     // expected "application/zip"
+  string file_name = 3;
+  // Optional: LER "UtilityPackageGuid" if the proxy extracts it (Danish: "LedningspakkeGuid").
+  string utility_package_guid = 4;
+}
+
+// (15) Get status for a single utility package (Danish: "ledningspakkeStatus/{id}").
+message GetUtilityPackageStatusRequest {
+  LerCallContext ctx = 1;
+  string id = 2; // excavation request number (Danish: "GraveforespørgselsNr")
+}
+
+message GetUtilityPackageStatusResponse {
+  string id = 1;                              // same id as request
+  UtilityPackageCombinedStatus status = 2;    // combined LER status
+  string utility_package_guid = 3;            // Danish: "LedningspakkeGuid"
+}
+
+// (25) List statuses for all active utility packages.
+message ListUtilityPackageStatusesRequest {
+  LerCallContext ctx = 1;
+}
+
+message ListUtilityPackageStatusesResponse {
+  repeated UtilityPackageStatusItem items = 1;
+}
+
+message UtilityPackageStatusItem {
+  string id = 1;                              // excavation request number (Danish: "GraveforespørgselsNr")
+  bool is_colocation_request = 2;             // Danish: "er_samføringsforespørgsel"
+  UtilityPackageCombinedStatus status = 3;
+  string utility_package_guid = 4;            // Danish: "LedningspakkeGuid"
+}
+
+// (26) Acknowledge utility package reception (Danish: "ledningspakkeModtaget/{id}").
+// LER expects no body; the proxy returns an empty response on success.
+message AckUtilityPackageRequest {
+  LerCallContext ctx = 1;
+  string id = 2; // excavation request number (Danish: "GraveforespørgselsNr")
+}
+
+message AckUtilityPackageResponse {}
+
+// (24) Get receipt for excavation request (Danish: "kvittering for graveforespørgsel").
+message GetExcavationReceiptRequest {
+  LerCallContext ctx = 1;
+  string id = 2; // excavation request number (Danish: "GraveforespørgselsNr")
+}
+
+message GetExcavationReceiptResponse {
+  // Free-form receipt payload from LER. Start simple as JSON text.
+  string receipt_json = 1;
+}
+
+// Proxy ping
+message PingRequest {}
+
+message PingResponse {
+  string message = 1;
+  string proxy_version = 2;
+}
+
